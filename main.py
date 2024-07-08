@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import pandas as pd
 
 import datetime as dt
@@ -30,13 +31,14 @@ def combine(month:int, year: int, filter_month:int):
     str_month = str(month).zfill(2)
     str_year = str(year)
 
-    columns = ['INVNUM', 'MRN', 'VisitNumber', 'Location', 'Reason', 'RetrievalStatus','RetrievalDescription', 'CreatedDate', 'BOTRequestDate', 'LastModifiedDate','RecordAttemptCount']
+    columns = ['INVNUM', 'MRN', 'VisitNumber', 'Location', 'CodifyComments','Reason', 'RetrievalStatus','RetrievalDescription', 'CreatedDate', 'BOTRequestDate', 'LastModifiedDate','RecordAttemptCount']
 
     dtypes = {
         'INVNUM': 'int',
         'MRN': 'str',
         'VisitNumber': 'str',
         'Location': 'str',
+        'CodifyComments': 'str',
         'Reason': 'str',
         'RetrievalDescription': 'str',
         'BotRequestDate': 'datetime64[ns]',
@@ -48,8 +50,13 @@ def combine(month:int, year: int, filter_month:int):
     
     df = pd.concat([pd.read_excel(file, engine='openpyxl', dtype=dtypes) for file in glob(search_path) if '~' not in file])[columns]
     
+    df = df.reset_index(drop=True)
+    
     # gautam confirmed the report he uses for invoicing goes off CreatedDate
     df = df[df['CreatedDate'].dt.month == filter_month]
+    
+    # if CodifyComments is null, populate with value from "Reason" column
+    df['CodifyComments'] = df['CodifyComments'].fillna(df['Reason'])
     return df
 
 def parse_invoicing(outputs_df):
@@ -85,18 +92,34 @@ def get_prior_month_year(month:int, year:int):
     else:
         return month - 1, year
 
-if __name__ == '__main__':
-    month = 1
-    year = 2024
-    
+def get_next_month_year(month:int, year:int):
+    # if month is december, return 1
+    if month == 12:
+        return 1, year + 1
+    else:
+        return month + 1, year
+
+def main(month: int, year: int):
     prior_month, prior_year = get_prior_month_year(month, year)
+    next_month, next_year = get_next_month_year(month, year)
     
     curr_month = combine(month,year,month)
     # since the bot is working overnight, sutherland charges based on the date the account is worked. at the end of the month, there are accounts that appear on the prior months inventory but get worked in the current month
     # as such, we must look at files for the prior month and parse out accounts that were worked in the current month
     last_month = combine(prior_month,prior_year,month)
+    next_month_data = combine(next_month,next_year,month)
+
     
-    files = pd.concat([last_month,curr_month])
+    files_to_combine = []
+    if len(last_month) > 0:
+        files_to_combine.append(last_month)
+    if len(curr_month) > 0:
+        files_to_combine.append(curr_month)
+    if len(next_month_data) > 0:
+        files_to_combine.append(next_month_data)
+    
+    files = pd.concat(files_to_combine)
+    files = files.drop_duplicates()
     
     files_invoicing = parse_invoicing(files)
     
@@ -109,3 +132,7 @@ if __name__ == '__main__':
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
         files.to_excel(writer, sheet_name='Raw', index=None)
         files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
+
+if __name__ == '__main__':
+    main(6, 2024)
+    
