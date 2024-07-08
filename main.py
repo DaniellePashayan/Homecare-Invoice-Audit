@@ -134,5 +134,7 @@ def main(month: int, year: int):
         files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
 
 if __name__ == '__main__':
-    main(6, 2024)
+    month = int(input('Enter month: '))
+    year = int(input('Enter year: '))
+    main(month, year)
     
