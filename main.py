@@ -99,6 +99,21 @@ def get_next_month_year(month:int, year:int):
     else:
         return month + 1, year
 
+def categorize(df):
+    # based on the reason column
+    categories = {
+        "Response Reason is not 'Yes'": "Response Reason Not Matched",
+        'Visit Status': "Visit Status Not Matched",
+        'MR PDF Saved': "MR PDF Saved",
+        'Documents do not match criteria': "No Documents Found",
+        'Referral Number in Patient Info header': "Referral ID Validation Failed",
+        'Patient Information': "No Patient Info Found",
+        'Visit Type': "Visit Type Not Matched"
+    }
+    
+    df['Reason'] = df['Reason'].map(categories)
+    return df
+
 def main(month: int, year: int):
     prior_month, prior_year = get_prior_month_year(month, year)
     next_month, next_year = get_next_month_year(month, year)
@@ -130,7 +145,6 @@ def main(month: int, year: int):
     file_path = f'M:/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}/{str(month).zfill(2)} {str(year)}.xlsx'
 
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        files.to_excel(writer, sheet_name='Raw', index=None)
         files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
 
 if __name__ == '__main__':
