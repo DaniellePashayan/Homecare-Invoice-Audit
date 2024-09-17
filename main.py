@@ -137,6 +137,13 @@ def main(month: int, year: int):
     files = files.drop_duplicates()
     
     files_invoicing = parse_invoicing(files)
+    files_invoicing = categorize(files_invoicing)
+    
+    # remove duplicate successes
+    files_invoicing['CreatedDate'] = pd.to_datetime(files_invoicing['CreatedDate'])
+    first_success = files_invoicing[files_invoicing['Reason'] == 'MR PDF Saved'].sort_values('CreatedDate').drop_duplicates('INVNUM')
+    non_success = files_invoicing[files_invoicing['Reason'] != 'MR PDF Saved']
+    final = pd.concat([first_success, non_success]).sort_values(by='CreatedDate').reset_index(drop=True)
     
     # at the start of a new year, a folder needs to be created for the year
     if not os.path.exists(f'M:/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}'):
@@ -146,6 +153,7 @@ def main(month: int, year: int):
 
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
         files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
+        final.to_excel(writer, sheet_name='Final', index=None)
 
 if __name__ == '__main__':
     month = int(input('Enter month: '))
