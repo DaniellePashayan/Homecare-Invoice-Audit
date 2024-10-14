@@ -45,7 +45,7 @@ def combine(month:int, year: int, filter_month:int):
         'LastModifiedDate': 'datetime64[ns]'
     }
     
-    path = 'S:/NewRefCenter/ANewReferralPHI/NS/BOT/Input & Output Files/'
+    path = '//NASHCN01/SHAREDATA/NewRefCenter/ANewReferralPHI/NS/BOT/Input & Output Files/'
     search_path = f'{path}*Outbound_{str_month}*{str_year}.xlsx'
     
     df = pd.concat([pd.read_excel(file, engine='openpyxl', dtype=dtypes) for file in glob(search_path) if '~' not in file])[columns]
@@ -146,10 +146,10 @@ def main(month: int, year: int):
     final = pd.concat([first_success, non_success]).sort_values(by='CreatedDate').reset_index(drop=True)
     
     # at the start of a new year, a folder needs to be created for the year
-    if not os.path.exists(f'M:/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}'):
-        os.mkdir(f'M:/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}')
+    if not os.path.exists(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}'):
+        os.mkdir(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}')
         
-    file_path = f'M:/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}/{str(month).zfill(2)} {str(year)}.xlsx'
+    file_path = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}/{str(month).zfill(2)} {str(year)}.xlsx'
 
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
         files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
