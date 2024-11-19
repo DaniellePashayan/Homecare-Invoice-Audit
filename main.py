@@ -1,40 +1,11 @@
-from tqdm import tqdm
 import pandas as pd
+from datetime import datetime
 
-import datetime as dt
-from glob import glob
-import numpy as np
-import os
-import pytz
-import re
-
-def convert_to_est(date_str):
-    date = date_str.split(' ')
-    date = ' '.join(date[0:3])
-
-    # looks for 2 digit hour
-    pattern = '(?<!\d)(\d{1})(?!\d)'
-    match = re.search(pattern, date).group()
-    if match:
-        date = re.sub(pattern, r'0\g<1>', date)
-
-    date_ist = dt.datetime.strptime(date, '%m/%d/%Y %I:%M:%S %p')
-    ist_tz = pytz.timezone('Asia/Kolkata')
-    date_ist = ist_tz.localize(date_ist)
-
-    est_tz = pytz.timezone('US/Eastern')
-    date_est = date_ist.astimezone(est_tz)
-
-    return date_est
-
-def combine(month:int, year: int, filter_month:int):
-    str_month = str(month).zfill(2)
-    str_year = str(year)
-
-    columns = ['INVNUM', 'MRN', 'VisitNumber', 'Location', 'CodifyComments','Reason', 'RetrievalStatus','RetrievalDescription', 'CreatedDate', 'BOTRequestDate', 'LastModifiedDate','RecordAttemptCount']
+def read_transaction_report(month: str, year: str) -> pd.DataFrame:
+    columns = ['INVNUM', 'MRN', 'VisitNumber', 'Location', 'CodifyComments','Reason', 'RetrievalStatus','RetrievalDescription', 'CreatedDate', 'BOTRequestDate', 'LastModifiedDate','RecordAttemptCount', 'BotName']
 
     dtypes = {
-        'INVNUM': 'int',
+        'INVNUM': 'str', # since this contains all the bots, need to read as string and then convert later
         'MRN': 'str',
         'VisitNumber': 'str',
         'Location': 'str',
@@ -44,33 +15,25 @@ def combine(month:int, year: int, filter_month:int):
         'BotRequestDate': 'datetime64[ns]',
         'LastModifiedDate': 'datetime64[ns]'
     }
-    
-    path = '//NASHCN01/SHAREDATA/NewRefCenter/ANewReferralPHI/NS/BOT/Input & Output Files/'
-    search_path = f'{path}*Outbound_{str_month}*{str_year}.xlsx'
-    
-    df = pd.concat([pd.read_excel(file, engine='openpyxl', dtype=dtypes) for file in glob(search_path) if '~' not in file])[columns]
-    
-    df = df.reset_index(drop=True)
-    
-    # gautam confirmed the report he uses for invoicing goes off CreatedDate
-    df = df[df['CreatedDate'].dt.month == filter_month]
-    
-    # if CodifyComments is null, populate with value from "Reason" column
-    df['CodifyComments'] = df['CodifyComments'].fillna(df['Reason'])
-    return df
 
-def parse_invoicing(outputs_df):
+    transaction_report_path = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/.Sutherland Reports/{year}/{year} {month} - Transaction Report.xlsx'
+
+    data = pd.read_excel(transaction_report_path, sheet_name='export', dtype=dtypes, usecols=columns)
+
+    return data[data['BotName'] == 'HomeCareDischarge']
+
+def parse_attempt_count(df: pd.DataFrame) -> pd.DataFrame:
     # Create new columns for the extracted values
-    outputs_df['CareportSuccessCount'] = outputs_df['RecordAttemptCount'].str.extract(r'\[(\d+)/\d+\]')
-    outputs_df['CareportFailureCount'] = outputs_df['RecordAttemptCount'].str.extract(r'\[\d+/(\d+)\]')
-    outputs_df['SunriseSuccessCount'] = outputs_df['RecordAttemptCount'].str.extract(r'\]\,\[(\d+)/\d+\]')
-    outputs_df['SunriseFailureCount'] = outputs_df['RecordAttemptCount'].str.extract(r'\]\,\[\d+/(\d+)\]')
+    df['CareportSuccessCount'] = df['RecordAttemptCount'].str.extract(r'\[(\d+)/\d+\]')
+    df['CareportFailureCount'] = df['RecordAttemptCount'].str.extract(r'\[\d+/(\d+)\]')
+    df['SunriseSuccessCount'] = df['RecordAttemptCount'].str.extract(r'\]\,\[(\d+)/\d+\]')
+    df['SunriseFailureCount'] = df['RecordAttemptCount'].str.extract(r'\]\,\[\d+/(\d+)\]')
 
     # Convert the extracted values to numeric type
-    outputs_df['CareportSuccessCount'] = pd.to_numeric(outputs_df['CareportSuccessCount'])
-    outputs_df['CareportFailureCount'] = pd.to_numeric(outputs_df['CareportFailureCount'])
-    outputs_df['SunriseSuccessCount'] = pd.to_numeric(outputs_df['SunriseSuccessCount'])
-    outputs_df['SunriseFailureCount'] = pd.to_numeric(outputs_df['SunriseFailureCount'])
+    df['CareportSuccessCount'] = pd.to_numeric(df['CareportSuccessCount'])
+    df['CareportFailureCount'] = pd.to_numeric(df['CareportFailureCount'])
+    df['SunriseSuccessCount'] = pd.to_numeric(df['SunriseSuccessCount'])
+    df['SunriseFailureCount'] = pd.to_numeric(df['SunriseFailureCount'])
 
     nan_replacement = {
         'CareportSuccessCount': 0,
@@ -80,26 +43,11 @@ def parse_invoicing(outputs_df):
     }
 
     # Replace NaN values in multiple columns
-    outputs_df.fillna(nan_replacement, inplace=True)
+    df.fillna(nan_replacement, inplace=True)
     
-    
-    return outputs_df
+    return df
 
-def get_prior_month_year(month:int, year:int):
-    # if month is january, return 12
-    if month == 1:
-        return 12, year - 1
-    else:
-        return month - 1, year
-
-def get_next_month_year(month:int, year:int):
-    # if month is december, return 1
-    if month == 12:
-        return 1, year + 1
-    else:
-        return month + 1, year
-
-def categorize(df):
+def categorize(df: pd.DataFrame) -> pd.DataFrame:
     # based on the reason column
     categories = {
         "Response Reason is not 'Yes'": "Response Reason Not Matched",
@@ -114,49 +62,29 @@ def categorize(df):
     df['Reason'] = df['Reason'].map(categories)
     return df
 
-def main(month: int, year: int):
-    prior_month, prior_year = get_prior_month_year(month, year)
-    next_month, next_year = get_next_month_year(month, year)
+def create_pivots(df: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
     
-    curr_month = combine(month,year,month)
-    # since the bot is working overnight, sutherland charges based on the date the account is worked. at the end of the month, there are accounts that appear on the prior months inventory but get worked in the current month
-    # as such, we must look at files for the prior month and parse out accounts that were worked in the current month
-    last_month = combine(prior_month,prior_year,month)
-    next_month_data = combine(next_month,next_year,month)
-
+    careport_success = df.pivot_table(index='Reason', columns='CareportSuccessCount', values='INVNUM', aggfunc='count', fill_value=0)
+    sunrise_success = df.pivot_table(index='Reason', columns='SunriseSuccessCount', values='INVNUM', aggfunc='count', fill_value=0)
     
-    files_to_combine = []
-    if len(last_month) > 0:
-        files_to_combine.append(last_month)
-    if len(curr_month) > 0:
-        files_to_combine.append(curr_month)
-    if len(next_month_data) > 0:
-        files_to_combine.append(next_month_data)
-    
-    files = pd.concat(files_to_combine)
-    files = files.drop_duplicates()
-    
-    files_invoicing = parse_invoicing(files)
-    files_invoicing = categorize(files_invoicing)
-    
-    # remove duplicate successes
-    files_invoicing['CreatedDate'] = pd.to_datetime(files_invoicing['CreatedDate'])
-    first_success = files_invoicing[files_invoicing['Reason'] == 'MR PDF Saved'].sort_values('CreatedDate').drop_duplicates('INVNUM')
-    non_success = files_invoicing[files_invoicing['Reason'] != 'MR PDF Saved']
-    final = pd.concat([first_success, non_success]).sort_values(by='CreatedDate').reset_index(drop=True)
-    
-    # at the start of a new year, a folder needs to be created for the year
-    if not os.path.exists(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}'):
-        os.mkdir(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}')
-        
-    file_path = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{str(year)}/{str(month).zfill(2)} {str(year)}.xlsx'
-
-    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        files_invoicing.to_excel(writer, sheet_name='Invoicing', index=None)
-        final.to_excel(writer, sheet_name='Final', index=None)
+    return careport_success, sunrise_success
 
 if __name__ == '__main__':
-    month = int(input('Enter month: '))
-    year = int(input('Enter year: '))
-    main(month, year)
+    month = str(datetime.now().month - 1).zfill(2)
+    if month == '00':
+        month = '12'
+        year = str(datetime.now().year - 1)
+    else:
+        year = str(datetime.now().year)
+    
+    df = read_transaction_report(month, year)
+    df = parse_attempt_count(df)
+    df = categorize(df)
+    
+    careport_success, sunrise_success = create_pivots(df)
+    
+    with pd.ExcelWriter(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{year}/{month} {year}.xlsx') as writer:
+        df.to_excel(writer, sheet_name='Data')
+        careport_success.to_excel(writer, sheet_name='Careport Success')
+        sunrise_success.to_excel(writer, sheet_name='Sunrise Success')
     
