@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime
+import os
 
 def read_transaction_report(month: str, year: str) -> pd.DataFrame:
     columns = ['INVNUM', 'MRN', 'VisitNumber', 'Location', 'CodifyComments','Reason', 'RetrievalStatus','RetrievalDescription', 'CreatedDate', 'BOTRequestDate', 'LastModifiedDate','RecordAttemptCount', 'BotName']
@@ -82,7 +83,8 @@ if __name__ == '__main__':
     df = categorize(df)
     
     careport_success, sunrise_success = create_pivots(df)
-    
+    folder = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{year}/'
+    os.makedirs(folder, exist_ok=True)
     with pd.ExcelWriter(f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/CBO Westbury Managers/LEADERSHIP/Bot Folder/Part A/Home Care/Invoicing/{year}/{month} {year}.xlsx') as writer:
         df.to_excel(writer, sheet_name='Data')
         careport_success.to_excel(writer, sheet_name='Careport Success')
