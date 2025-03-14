@@ -19,7 +19,11 @@ def read_transaction_report(month: str, year: str) -> pd.DataFrame:
 
     transaction_report_path = f'//NT2KWB972SRV03/SHAREDATA/CPP-Data/Sutherland RPA/Northwell Process Automation ETM Files/Monthly Reports/.Sutherland Reports/{year}/{year} {month} - Transaction Report.xlsx'
 
-    data = pd.read_excel(transaction_report_path, sheet_name='export', dtype=dtypes, usecols=columns)
+    try:
+        data = pd.read_excel(transaction_report_path, sheet_name='export', dtype=dtypes, usecols=columns)
+    except ValueError:
+        data = pd.read_excel(transaction_report_path, sheet_name='Sheet1', dtype=dtypes, usecols=columns)
+        
 
     return data[data['BotName'] == 'HomeCareDischarge']
 
