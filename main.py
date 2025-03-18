@@ -13,7 +13,7 @@ def read_transaction_report(month: str, year: str) -> pd.DataFrame:
         'CodifyComments': 'str',
         'Reason': 'str',
         'RetrievalDescription': 'str',
-        'BotRequestDate': 'datetime64[ns]',
+        'BOTRequestDate': 'datetime64[ns]',
         'LastModifiedDate': 'datetime64[ns]'
     }
 
@@ -21,10 +21,11 @@ def read_transaction_report(month: str, year: str) -> pd.DataFrame:
 
     try:
         data = pd.read_excel(transaction_report_path, sheet_name='export', dtype=dtypes, usecols=columns)
+        # filter the BotRequestDate to ensure month and year match
     except ValueError:
         data = pd.read_excel(transaction_report_path, sheet_name='Sheet1', dtype=dtypes, usecols=columns)
+    data = data[(data['BOTRequestDate'].dt.month == int(month)) & (data['BOTRequestDate'].dt.year == int(year))]
         
-
     return data[data['BotName'] == 'HomeCareDischarge']
 
 def parse_attempt_count(df: pd.DataFrame) -> pd.DataFrame:
